@@ -1,0 +1,8 @@
+#ifndef L5_APPLICATION_MYISR_HPP_
+#define L5_APPLICATION_MYISR_HPP_
+
+
+void switch1();
+void switch2();
+
+#endif /* L5_APPLICATION_MYISR_HPP_ */

@@ -1,0 +1,28 @@
+int pin_num1,pin_num2;
+
+SemaphoreHandle_t isr = xSemaphoreCreateBinary();
+void myHandler()
+{
+u0_dbg_printf("In ISR\n");
+xSemaphoreGive(isr);
+if(xSemaphoreTake(isr,portMAX_DELAY))
+{
+u0_dbg_printf("In take\n");
+delay_ms(200);
+}
+
+xSemaphoreGive(isr);
+
+if(LPC_GPIOINT->IO2IntStatF & (1 << pin_num1))
+{
+
+switch1();
+}
+if(LPC_GPIOINT->IO2IntStatF & (1 << pin_num2))
+{
+
+switch2();
+}
+
+
+}

@@ -1,0 +1,93 @@
+I2C2& i2c = I2C2::getInstance();
+
+char send[1] ={0x12};
+char compass;
+uint8_t dataR[] = {0x34, 0x45, 0x56, 0x67,0x67,0x43};
+uint8_t dataW[3] = {};
+
+void uart(void *p)
+{
+
+	Uart2& u2 = Uart2::getInstance();
+	u2.init(9600,100,100);
+	char send;
+	char rec;
+	while(1)
+
+	{
+		//printf("in switch pressed\n");
+		//Get Version of Sensor
+		send = 0x11;
+		if(u2.putChar(send,10))
+		{
+			u2.getChar(&rec,10);
+			dataR[0] = (uint8_t)rec;
+			//printf("1st IF received data is %d\n", rec);
+		}
+
+		//Get Angle with North
+		send = 0x12;
+		if(u2.putChar(send,10))
+		{
+			u2.getChar(&rec,10);
+			dataR[1] = (uint8_t)rec;
+			//printf("2nd IF received data is %d\n", rec);
+		}
+
+		//Get Pitch
+		send = 0x14;
+		if(u2.putChar(send,10))
+		{
+			u2.getChar(&rec,10);
+			dataR[2] = (uint8_t)rec;
+			//printf("3rd IF received data is %d\n", rec);
+		}
+
+		//Get Roll
+		send = 0x15;
+		if(u2.putChar(send,10))
+		{
+			u2.getChar(&rec,10);
+			dataR[3] = (uint8_t)rec;
+			//printf("4th IF received data is %d\n", rec);
+		}
+
+		//Get Pitch without Kalman
+		send = 0x16;
+		if(u2.putChar(send,10))
+		{
+			u2.getChar(&rec,10);
+			dataR[4] = (uint8_t)rec;
+			//printf("5th IF received data is %d\n", rec);
+		}
+
+		//Get Roll without Kalman
+		send = 0x17;
+		if(u2.putChar(send,10))
+		{
+			u2.getChar(&rec,10);
+			dataR[5] = (uint8_t)rec;
+			//printf("6th IF received data is %d\n", rec);
+		}
+
+	}
+
+}
+
+int main(void)
+{
+
+
+	i2c.init_slave(0x44,dataW,dataR,3,6);
+	xTaskCreate(uart,"myUart",STACK_BYTES(2048),0,PRIORITY_LOW,0);
+	vTaskStartScheduler();
+	while(1)
+	{
+		if(SW.getSwitch(1) )
+		{
+			for(int i = 0; i < 3; i ++)
+				printf("DataW[%d]=%x  ",i,dataW[i]);
+			printf("\n\n");
+		}
+	}
+}

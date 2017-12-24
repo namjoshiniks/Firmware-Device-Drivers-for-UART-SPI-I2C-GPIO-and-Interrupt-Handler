@@ -1,0 +1,192 @@
+I2C_Base::mStateMachineStatus_t I2C_Base::i2cStateMachine()
+{
+    enum {
+        // General states :
+        busError        = 0x00,
+        start           = 0x08,
+        repeatStart     = 0x10,
+        arbitrationLost = 0x38,
+
+        // Master Transmitter States:
+        slaveAddressAcked  = 0x18,
+        slaveAddressNacked = 0x20,
+        dataAckedBySlave   = 0x28,
+        dataNackedBySlave  = 0x30,
+
+        // Master Receiver States:
+        readAckedBySlave      = 0x40,
+        readModeNackedBySlave = 0x48,
+        dataAvailableAckSent  = 0x50,
+        dataAvailableNackSent = 0x58,
+
+		//Slave Transmitter States
+	 receivedSlaveAddressACK = 0xA8,
+        slaveI2DATreceivedACK = 0xB8,
+        slaveI2DATreceivedNotACK = 0xC0,
+
+		//Slave Receiver States
+	 slavewriteReceivedAcked = 0x60,
+	 slaveRegaddressreceivedAcked = 0x80,
+	 slaveDatareceivedAcked = 0x90,
+	 slaveStop = 0xA0
+    };
+
+    mStateMachineStatus_t state = busy;
+
+
+switch (mpI2CRegs->I2STAT)
+    {
+
+
+    	//Slave Receiver mode
+    	case slavewriteReceivedAcked:
+    		mpI2CRegs->I2CONCLR = ((1 << 5));
+    		setAckFlag();
+    		sTransaction.isregaddress = true;
+    		sTransaction.validWRITEregaddrflag = false;
+    		sTransaction.validREADregaddrflag = false;
+    		sTransaction.count = 0;
+    		clearSIFlag();
+    		u0_dbg_printf("slavewriteReceivedAcked\n");
+    		break;
+    	case slaveRegaddressreceivedAcked:
+    		mpI2CRegs->I2CONCLR = ((1 << 5));
+    		uint8_t data;
+    		data = mpI2CRegs->I2DAT;
+    		u0_dbg_printf("slaveRegaddressreceivedAcked\n");
+    		if(sTransaction.isregaddress)
+    		{
+
+
+    			u0_dbg_printf("Reg_Addr %x\n",data);
+    			sTransaction.regAddr = data;
+    			sTransaction.isregaddress = false;
+    			if(data < mSlaveMemSizeW)
+    			{
+
+
+    				u0_dbg_printf("Correct Write Reg Address\n");
+    				sTransaction.validWRITEregaddrflag = true;
+    				sTransaction.validREADregaddrflag = false;
+    				setAckFlag();
+    			}
+    			else if(data >= mSlaveMemSizeW && 	data<(mSlaveMemSizeW + mSlaveMemSizeR))
+    			{
+    				//setNackFlag();
+    				//clearSTARTFlag();
+    				sTransaction.validWRITEregaddrflag = false;
+    				sTransaction.validREADregaddrflag = true;
+    				u0_dbg_printf("Correct Read Reg Address\n");
+
+
+    			}
+    			else
+    			{
+    				u0_dbg_printf("Incorrect Register Address\n");
+    				sTransaction.validWRITEregaddrflag = false;
+    				sTransaction.validREADregaddrflag = false;
+    			}
+
+    		}
+    		else if(sTransaction.validWRITEregaddrflag)
+    		{
+    			if((sTransaction.regAddr+sTransaction.count) < 3)
+    			{
+    			u0_dbg_printf("Byte Data %x\n",data);
+    			*(mSlaveMemW+sTransaction.regAddr+sTransaction.count) = data;
+    			sTransaction.count++;
+    			setAckFlag();
+    			}
+    			else
+    			{
+    				u0_dbg_printf("Max Write Excedded\n");
+    			}
+
+    		}
+
+
+
+    		clearSIFlag();
+       		break;
+    	case slaveDatareceivedAcked:
+    		mpI2CRegs->I2CONSET = (1 << 2);
+    		uint8_t data_byte;
+    		data_byte = mpI2CRegs->I2DAT;
+    		u0_dbg_printf("slaveDatareceivedAcked\n");
+    		u0_dbg_printf("Data Byte = %d\n",data_byte);
+    		clearSIFlag();
+    		break;
+
+    	case slaveStop:
+    		clearSTARTFlag();
+    		clearSIFlag();
+    		setAckFlag() ;
+    		u0_dbg_printf("slaveStop or Repeat Start\n");
+    		break;
+
+
+    		//Slave transmitter mode
+    	case receivedSlaveAddressACK:
+    		if(sTransaction.validREADregaddrflag)
+    		{
+    			u0_dbg_printf("Valid Address\n");
+    			//if((sTransaction.regAddr+sTransaction.count) < 9 )
+    			//{
+    				mpI2CRegs->I2DAT = *(mSlaveMemR+sTransaction.regAddr - 3 + sTransaction.count);
+    				sTransaction.count++;
+
+    			//}
+    			//else
+    			//{
+    				//u0_dbg_printf("Read Limit Exceeded\n");
+    				//mpI2CRegs->I2DAT = 0x00;
+    			//}
+
+    		}
+    		else
+    		{
+    			mpI2CRegs->I2DAT = 0x00;
+    			u0_dbg_printf("Invalid Reg Address\n");
+    		}
+    		mpI2CRegs->I2CONCLR = (1 << 4);//STO
+    		mpI2CRegs->I2CONSET = (1 << 2); //AA
+    		clearSIFlag();
+    		u0_dbg_printf("receivedSlaveAddressACK\n");
+    		break;
+
+    	case slaveI2DATreceivedACK:
+    		if(sTransaction.validREADregaddrflag)
+    		{
+
+    			u0_dbg_printf("Valid Address\n");
+    			if((sTransaction.regAddr+sTransaction.count) < 9 )
+    			{
+    				mpI2CRegs->I2DAT = *(mSlaveMemR+sTransaction.regAddr - 3 +sTransaction.count);
+    				sTransaction.count++;
+
+    			}
+    			else
+    			{
+    				u0_dbg_printf("Read Limit Exceeded\n");
+    				mpI2CRegs->I2DAT = 0x00;
+    			}
+    		}
+    		else
+    		{
+    			mpI2CRegs->I2DAT = 0x00;
+    			u0_dbg_printf("InValid Address\n");
+    		}
+    		mpI2CRegs->I2CONCLR = (1 << 4);//STO
+    		mpI2CRegs->I2CONSET = (1 << 2); //AA
+    		clearSIFlag();
+    		u0_dbg_printf("slaveI2DATreceivedACK\n");
+    		break;
+
+    	case slaveI2DATreceivedNotACK:
+    		mpI2CRegs->I2CONCLR = ((1 << 5));
+    		setAckFlag() ;
+    		clearSIFlag();
+    		u0_dbg_printf("slaveI2DATreceivedNotACK\n");
+    		break;
+
+}

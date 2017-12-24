@@ -1,0 +1,2 @@
+cp.addHandler(ledOnHandler, "ledon", "Will glow external interfaced led");
+cp.addHandler(ledOffHandler, "ledoff", "Will turn off externally interfaced led");

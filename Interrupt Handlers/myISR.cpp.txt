@@ -1,0 +1,33 @@
+void switch1()
+{
+LE.on(1);
+
+LE.on(4);
+u0_dbg_printf("switch 1\n");
+/* Clear PORT 2.0 and 2.1 for falling edge*/
+
+LE.off(1);
+
+LE.off(4);
+
+
+LPC_GPIOINT->IO2IntClr = 0xFFFFFFFF;
+
+
+}
+
+void switch2()
+{
+LE.on(2);
+LE.on(3);
+u0_dbg_printf("switch 2\n");
+
+LE.off(2);
+
+LE.off(3);
+
+
+LPC_GPIOINT->IO2IntClr = 0xFFFFFFFF;
+
+}
+

@@ -1,0 +1,99 @@
+QueueHandle_t Receive_UART_Handle = 0;
+void UART_INIT()
+{
+int baud = 9600;
+LPC_SC->PCONP |= (1 << 24);
+LPC_SC->PCLKSEL1 &= ~(3 << 16);
+LPC_SC->PCLKSEL1 |= (1 << 16);
+LPC_PINCON->PINSEL4 &= ~(3 << 16);
+LPC_PINCON->PINSEL4 |= (2 << 16);
+LPC_PINCON->PINSEL4 &= ~(3 << 18);
+LPC_PINCON->PINSEL4 |= (2 << 18);
+LPC_UART2->LCR |= (1 << 7);
+LPC_UART2->DLL = sys_get_cpu_clock()/((16 * baud) );
+LPC_UART2->DLM = 0;
+LPC_UART2->LCR |= 3;
+LPC_UART2->LCR &= ~(1 << 7);
+ 
+
+}
+void Enable_Receiver_Interrupt()
+{
+LPC_UART2->LCR &= ~(1 << 7);
+LPC_UART2->IER |= 1 << 0;
+}
+bool UART2_PutChar(char data)
+{
+LPC_UART2->THR = data;
+while(1)
+{
+if(LPC_UART2->LSR & (1 << 5))
+break;
+}
+return true;
+}
+
+//POLLING FUNCTION TO RECEIVE UART DATA
+bool UART2_GetChar(char& data)
+{
+if(LPC_UART2->LSR & (1<<0))
+{
+data = LPC_UART2->RBR;
+return true;
+}
+return false;
+}
+// INTERRUPT TO RECEIVE UART DATA
+void MY_UART2_Interrupt(void)
+{
+char data = LPC_UART2->RBR;
+if(xQueueSend(Receive_UART_Handle,&data,1000))
+u0_dbg_printf("Sent to the queue\n");
+}
+
+class UART_TASK : public scheduler_task
+{
+public:
+UART_TASK(uint8_t priority) : scheduler_task("task", 2000, priority)
+{
+/* Nothing to init */
+}
+bool init(void)
+{
+UART_INIT();
+Enable_Receiver_Interrupt();
+NVIC_EnableIRQ(UART2_IRQn);
+isr_register(UART2_IRQn ,MY_UART2_Interrupt);
+Receive_UART_Handle = xQueueCreate(3,sizeof(char));
+
+return true;
+}
+bool run(void *p)
+{
+char outData;
+if(SW.getSwitch(1))
+{
+bool t = UART2_PutChar('N');
+if(t)
+printf("Sent Data with success\n");
+}
+else if(SW.getSwitch(2))
+{
+bool t = UART2_PutChar('S');
+if(t)
+printf("Sent Data with success\n");
+}
+if(xQueueReceive(Receive_UART_Handle,&outData,1000))
+u0_dbg_printf("Received %c from queue\n",outData);
+return true;
+
+}
+
+};
+
+int main()
+{
+scheduler_add_task(new UART_TASK(PRIORITY_LOW));
+scheduler_start(); ///< This shouldn't return
+return -1;
+}

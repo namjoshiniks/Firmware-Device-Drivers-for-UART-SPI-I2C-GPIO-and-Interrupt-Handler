@@ -1,0 +1,51 @@
+int temp = 1;
+
+QueueHandle_t myUartHandler = 0;
+
+void enable_myeint3(int pinNum1,int pinNum2)
+{
+pin_num1 = pinNum1;
+pin_num2 = pinNum2;
+LPC_GPIO2 -> FIODIR &= ~(1 << pinNum1);
+LPC_GPIO2 -> FIODIR &= ~(1 << pinNum2);
+/* Enable PORT 2.0 and 2.1 for falling edge*/
+LPC_GPIOINT->IO2IntEnF |= 1 << pinNum1;
+LPC_GPIOINT->IO2IntEnF |= 1 << pinNum2;
+
+isr_register(EINT3_IRQn,myHandler);
+NVIC_EnableIRQ(EINT3_IRQn);
+
+}
+
+// Here is the Interrupt Function in a main.cpp file
+
+class myEint : public scheduler_task
+{
+public:
+myEint(uint8_t priority) : scheduler_task("task", 2000, priority)
+{
+init();
+
+}
+bool init(void)
+{
+
+enable_myeint3(1,3);
+return true;
+}
+
+ 
+
+
+bool run(void *p)
+{
+return true;
+}
+};
+
+
+int main(void)
+{
+scheduler_add_task(new myEint(PRIORITY_HIGH));
+}
+

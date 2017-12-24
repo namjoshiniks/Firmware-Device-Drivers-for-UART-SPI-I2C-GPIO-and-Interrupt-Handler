@@ -1,0 +1,322 @@
+using namespace std;
+
+bool flag1 = false;
+bool flag2 = false;
+bool flag3 = false;
+int count;
+char bytes;
+
+void SPI1_Initialization()
+{
+	LPC_SC->PCONP |= (1 << 10);
+	LPC_SC->PCLKSEL0 &= ~(3 << 20);
+	LPC_SC->PCLKSEL0 |= (1 << 20);
+
+	LPC_PINCON->PINSEL0 &= ~((3 << 14) | (3 << 16) | (3 << 18));
+	LPC_PINCON->PINSEL0 |= ((2 << 14) | (2 << 16) | (2 << 18));
+
+	LPC_SSP1->CR0 = 7;
+	LPC_SSP1->CR1 = 2;
+	LPC_SSP1->CPSR = 8;
+}
+
+
+char exchange_bytes(char outData){
+
+
+	LPC_SSP1->DR = outData;
+	string temp;
+	while(LPC_SSP1->SR & (1 << 4))
+	{
+	}
+	return LPC_SSP1->DR;
+
+}
+
+void Chip_Select(bool status)
+{
+		LPC_GPIO0->FIODIR |= (1 << 6);
+		if(status)
+			LPC_GPIO0->FIOPIN &= ~(1 << 6); //status = 0 means select CS
+		else
+			LPC_GPIO0->FIOPIN |= (1 << 6); //status = 1 means de-select CS
+}
+
+class SPI_TASK : public scheduler_task
+{
+
+public:
+        SPI_TASK(uint8_t priority) : scheduler_task("task", 2000, priority)
+        {
+            /* Nothing to init */
+        }
+
+        bool init(void)
+        {
+        	SPI1_Initialization();
+
+            return true;
+        }
+
+        bool run(void *p)
+        {
+        	if(SW.getSwitch(3) && !flag3)
+			{
+			 flag3 = true;
+			 Chip_Select(true);
+			}
+        	if(SW.getSwitch(2) && !flag2)
+			{
+			 flag2 = true;
+			 Chip_Select(true);
+			}
+
+        	if(SW.getSwitch(1) && !flag1)
+        	{
+        	 flag1 = true;
+        	 Chip_Select(true);
+        	}
+        	if(flag1)
+        	{
+        		char data = 0x9F;
+				char info = exchange_bytes(data);
+
+				delay_ms(200);
+				if(count == 0)
+				{
+					u0_dbg_printf("Specifications\n");
+					count = count + 1;
+				}
+				else if(count == 1)
+				{
+					u0_dbg_printf("Manufacturer ID: 0X%02XH\n",info);
+					count = count + 1;
+				}
+				else if(count == 2)
+				{
+					bytes = info;
+					count = count + 1;
+				}
+				else if(count == 3)
+				{
+					u0_dbg_printf("Device ID: 0X%02X%02XH\n",info,bytes);
+					count = count + 1;
+				}
+				else if(count == 4)
+				{
+					u0_dbg_printf("EDI String length: 0X%02XH\n",info);
+					count = count + 1;
+				}
+				else if(count == 5)
+				{
+					u0_dbg_printf("EDI Data Byte1: 0X%02XH\n\n",info);
+					flag1 = false;
+					Chip_Select(false);
+					count = 0;
+				}
+        	}
+        	if(flag2)
+        	{
+        		char data = 0xD7;
+				char info = exchange_bytes(data);
+
+				delay_ms(200);
+				if(count == 0)
+				{
+					count = count + 1;
+
+				}
+				else if(count == 1)
+				{
+					bytes = info;
+					count = count + 1;
+				}
+				else if(count == 2)
+				{
+					count = 0;
+					u0_dbg_printf("Status Register Byte 1: 0X%02XH\n",bytes);
+					u0_dbg_printf("Status Register Byte 2: 0X%02XH\n\n",info);
+					flag2 = false;
+					Chip_Select(false);
+					printf("Byte1(Bit 0) : ");
+					if(bytes & (1))
+					{
+						printf("Device is configured to 'power of 2' binary page size(512 bytes)\n");
+					}
+					else
+					{
+						printf("Device is configured for standard DataFlash page size(528 bytes)\n");
+					}
+
+					printf("Byte1(Bit 1) : ");
+					if(bytes & (1 << 1))
+					{
+						printf("Sector Protection is Enabled\n");
+					}
+					else
+					{
+						printf("Sector Protection is Disabled\n");
+					}
+					char data = (bytes & (15 << 2));
+					printf("Byte1(Bits[5:2]) = %02X :  ",data);
+					printf("Represents Density Code\n");
+					printf("Byte1(Bit 6) : ");
+					if(bytes & (1 << 6))
+					{
+						printf("Main memory page data does not match buffer data\n");
+					}
+					else
+					{
+						printf("Main memory page data matches bufffer data\n");
+					}
+					printf("Byte1(Bit 7) : ");
+
+					if(bytes & (1 << 7))
+					{
+						printf("Device is Ready\n\n");
+					}
+					else
+					{
+						printf("Device is busy with an internal operation\n\n");
+					}
+
+					printf("Byte2(Bit 0) : ");
+					if(info & (1))
+					{
+						printf("A sector is erase suspended\n");
+					}
+					else
+					{
+						printf("No sectors are erase suspended\n");
+					}
+					printf("Byte2(Bit 1) : ");
+					if(info & (1 << 1))
+					{
+						printf("A sector is program suspended while using Buffer 1\n");
+					}
+					else
+					{
+						printf("No program operation has been suspended while using Buffer 1\n");
+					}
+					printf("Byte2(Bit 2) : ");
+					if(info & (1 << 2))
+					{
+						printf("A sector is program suspended while using Buffer 2\n");
+					}
+					else
+					{
+						printf("No program operation has been suspended while using Buffer 2\n");
+					}
+					printf("Byte2(Bit 3) : ");
+					if(info & (1 << 3))
+					{
+						printf("A sector lock down command is enabled\n");
+					}
+					else
+					{
+						printf("A sector lock down command is disabled\n");
+					}
+					printf("Byte2(Bit 4) : ");
+					printf("Reserved for future use\n");
+					printf("Byte2(Bit 5) : ");
+					if(info & (1 << 5))
+					{
+						printf("Erase or program error detected\n");
+					}
+					else
+					{
+						printf("Erase or program operation was successful\n");
+					}
+					printf("Byte2(Bit 6) : ");
+					printf("Reserved for future use\n");
+					printf("Byte2(Bit 7) : ");
+					if(info & (1 << 7))
+					{
+						printf("Device is ready\n\n");
+					}
+					else
+						printf("Device is busy with internal operations\n\n");
+					Chip_Select(false);
+
+
+
+
+				}
+        	}
+        	if(flag3)
+        	{
+
+        		unsigned char pdata[512];
+        		int ret = flash_read_sectors(pdata,0,1);
+        		printf("Retval %d\n",ret);
+        		delay_ms(1000);
+        		for(int i = 0; i < 512; i++)
+        			printf("pdata[%d] = %X\n ",i,pdata[i]);
+
+        		//Reading Page 0 data of specific bytes.
+        		printf("pdata[%d] = %X\n ",11,pdata[11]);
+        		printf("pdata[%d] = %X\n ",12,pdata[12]);
+        		printf("pdata[%d] = %X\n ",13,pdata[13]);
+        		printf("pdata[%d] = %X\n ",19,pdata[19]);
+        		printf("pdata[%d] = %X\n ",20,pdata[20]);
+        		printf("pdata[%d] = %X\n ",22,pdata[22]);
+        		printf("pdata[%d] = %X\n ",23,pdata[23]);
+        		flag3 = false;
+        		Chip_Select(false);
+
+
+
+        	}
+
+            return true;
+        }
+};
+
+int main(void)
+{
+
+#if 1
+	scheduler_add_task(new terminalTask(PRIORITY_HIGH));
+	/* Consumes very little CPU, but need highest priority to handle mesh network ACKs */
+	scheduler_add_task(new wirelessTask(PRIORITY_CRITICAL));
+#endif
+
+	 scheduler_add_task(new SPI_TASK(PRIORITY_LOW));
+
+
+	/* Change "#if 0" to "#if 1" to run period tasks; @see period_callbacks.cpp */
+#if 0
+	const bool run_1Khz = false;
+	scheduler_add_task(new periodicSchedulerTask(run_1Khz));
+#endif
+
+#if 0
+	scheduler_add_task(new example_io_demo());
+#endif
+
+#if 0
+	scheduler_add_task(new example_task());
+	scheduler_add_task(new example_alarm());
+	scheduler_add_task(new example_logger_qset());
+	scheduler_add_task(new example_nv_vars());
+#endif
+
+#if 0
+	scheduler_add_task(new queue_tx());
+	scheduler_add_task(new queue_rx());
+#endif
+
+#if 0
+	scheduler_add_task(new producer());
+	scheduler_add_task(new consumer());
+#endif
+
+#if 0
+	Uart3 &u3 = Uart3::getInstance();
+	u3.init(WIFI_BAUD_RATE, WIFI_RXQ_SIZE, WIFI_TXQ_SIZE);
+	scheduler_add_task(new wifiTask(Uart3::getInstance(), PRIORITY_LOW));
+#endif
+
+	scheduler_start(); ///< This shouldn't return
+	return -1;
+}

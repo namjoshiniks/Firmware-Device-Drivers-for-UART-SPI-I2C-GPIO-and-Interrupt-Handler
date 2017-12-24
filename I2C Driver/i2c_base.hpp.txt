@@ -1,0 +1,34 @@
+class I2C_Base
+{
+	private:
+		uint8_t *mSlaveMemW;
+		uint8_t *mSlaveMemR;
+		size_t mSlaveMemSizeW;
+		size_t mSlaveMemSizeR;
+		//uint8_t data[4] = {0xAA,0xAE,0xAW,0x76};
+    public:
+	void init_slave(uint8_t addr, uint8_t *slave_mem_writeW,uint8_t *slave_mem_readR, uint8_t mem_size_write, uint8_t mem_size_read)
+	{
+		u0_dbg_printf("Slave Mode\n");
+		mSlaveMemW = slave_mem_writeW;
+		mSlaveMemR = slave_mem_readR;
+		mSlaveMemSizeW = mem_size_write;
+		mSlaveMemSizeR = mem_size_read;
+		mpI2CRegs->I2ADR0 = addr;
+		//mpI2CRegs->I2MASK0 = 0xFF;
+		mpI2CRegs->I2MASK0 = 0xFF;
+		mpI2CRegs->I2CONSET = 0x44;
+		 u0_dbg_printf("Slavera %x\n",mpI2CRegs->I2ADR0);
+		 u0_dbg_printf("Conset %x\n",mpI2CRegs->I2CONSET);
+	}
+	  typedef struct
+        {
+        	uint8_t regAddr;
+        	bool isregaddress;
+        	int count;
+        	bool validREADregaddrflag;
+        	bool validWRITEregaddrflag;
+        }sI2CTransaction;
+
+        sI2CTransaction sTransaction;
+}

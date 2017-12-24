@@ -1,0 +1,19 @@
+bool period_init(void)
+		{
+			LPC_GPIO2->FIODIR &= ~(1 << 1);
+			LPC_GPIO2->FIODIR |= (1 << 2);
+			return true; // Must return true upon success
+		}
+
+		void period_10Hz(uint32_t count)
+		{
+			if(flag == false)
+			{
+				if(LPC_GPIO2->FIOPIN & (1 << 1))
+				   LPC_GPIO2->FIOPIN |= (1 << 2);
+				else
+				   LPC_GPIO2->FIOPIN &= ~(1 << 2);
+			}
+
+
+		}

@@ -1,0 +1,7 @@
+extern bool flag;
+		
+		//Handler to turn off external led
+		CMD_HANDLER_FUNC(ledOffHandler);
+
+		// Handler to glow external led
+		CMD_HANDLER_FUNC(ledOnHandler);
